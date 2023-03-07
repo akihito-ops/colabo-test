@@ -1,0 +1,89 @@
+version: '3.9'
+services:
+
+  #PHP Service
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: digitalocean.com/php
+    container_name: postgre_app
+    restart: unless-stopped
+    tty: true
+    environment:
+      SERVICE_NAME: app
+      SERVICE_TAGS: dev
+    working_dir: /var/www
+    volumes:
+      - ./laravel:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - app-network
+
+  #Nginx Service
+  webserver:
+    image: nginx:alpine
+    container_name: postgre_nginx
+    restart: unless-stopped
+    tty: true
+    ports:
+      - '1111:80'
+    volumes:
+      - ./laravel:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+    networks:
+      - app-network
+
+  #PostgreSQL Service
+  pgsql:
+    build: ./docker/pgsql
+    container_name: postgre_db
+    restart: unless-stopped
+    tty: true
+    ports:
+      - '1112:5432'
+    environment:
+      POSTGRES_ROOT_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
+      POSTGRES_DATABASE: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: '--encoding=UTF-8 --lc-collate=C --lc-ctype=C'
+      TZ: "Asia/Tokyo"
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - ./docker/pgsql/pgdata:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  #PHPMYADMIN
+  pgadmin:
+    container_name: postgre_pgadmin
+    image: dpage/pgadmin4
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD}
+      POSTGRES_HOST_AUTH_METHOD: trust
+      PMA_HOST: ${DB_HOST}
+      PMA_USER: 'root'
+      PMA_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
+      PMA_ARBITRARY: 1
+      UPLOAD_LIMIT: 300M
+    volumes:
+       - './docker/pgadmin:/var/lib/pgadmin'
+    links:
+      - pgsql:pgsql
+    networks:
+      - app-network
+    ports:
+      - '1113:80'
+
+#Docker Networks
+networks:
+  app-network:
+    driver: bridge
+#Volumes
+volumes:
+  pgdata:
+    driver: local
